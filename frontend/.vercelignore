@@ -1,0 +1,9 @@
+# Las variables de entorno se configuran en el proyecto de Vercel, no se suben.
+# Si .env.local llega al build, sus valores compiten con los del proyecto y
+# depurar cuál ganó es una pérdida de tiempo.
+.env
+.env.*
+
+node_modules
+dist
+.vercel
