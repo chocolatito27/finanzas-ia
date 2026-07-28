@@ -6,6 +6,22 @@ sus ingresos y gastos reales, la tendencia mes a mes y una proyección de cierre
 
 Los montos van en Soles (S/) y toda la interfaz está en español.
 
+## En producción
+
+| | URL |
+|---|---|
+| **App** | <https://finanzas-ia-lake.vercel.app> |
+| API | <https://finanzas-ia-api.onrender.com> |
+| Docs de la API | <https://finanzas-ia-api.onrender.com/docs> |
+| Repositorio | <https://github.com/chocolatito27/finanzas-ia> |
+
+El frontend está en Vercel y el backend en el plan gratuito de Render, que
+**duerme tras 15 minutos sin tráfico**: la primera visita después de un rato
+espera ~1 minuto a que despierte, y recién ahí empieza a procesar. Para quitarlo
+hay que pasar a un plan pago (~$7/mes en Render, ~$5/mes en Railway).
+
+Cada `git push` a `main` redespliega ambos automáticamente.
+
 ---
 
 ## Levantar el proyecto en local
@@ -240,6 +256,8 @@ eje y la longitud hace el trabajo.
 
 ## Deploy
 
+Ya está desplegado; esto es para reconstruirlo o mover el proyecto.
+
 ### Frontend → Vercel
 
 ```bash
@@ -247,20 +265,38 @@ cd frontend
 npx vercel --prod
 ```
 
-Variables a configurar en el proyecto de Vercel: `VITE_SUPABASE_URL`,
-`VITE_SUPABASE_ANON_KEY`, `VITE_API_URL` (la URL pública del backend),
-`VITE_WHATSAPP_NUMBER`, `VITE_ADMIN_EMAILS`.
+Las variables **no se cargan con `vercel env add`**. Pasarle el valor por una
+tubería de PowerShell le antepone un BOM (U+FEFF) invisible; ese carácter quedó
+pegado al inicio de la clave de Supabase y el navegador rechazaba toda petición
+con *"String contains non ISO-8859-1 code point"*, porque un header HTTP no
+admite caracteres fuera de Latin-1. Usa el script, que además relee y verifica:
 
-### Backend → Railway o Render
+```bash
+set VERCEL_TOKEN=...
+python frontend/configurar_vercel_env.py
+```
 
-Comando de arranque:
+Se guardan como `plain` y no `encrypted` a propósito: todas terminan dentro del
+JavaScript que descarga el navegador, así que no son secretas, y en claro se
+pueden releer para comprobar que no traigan basura invisible.
+
+### Backend → Render
+
+Servicio `finanzas-ia-api`, tipo *web service*, runtime Python, `rootDir` =
+`backend`, rama `main`, con auto-deploy activado.
 
 ```bash
 uvicorn main:app --host 0.0.0.0 --port $PORT
 ```
 
-Copia todas las variables de `backend/.env` y agrega el dominio de Vercel a
-`FRONTEND_ORIGINS`, si no el navegador bloqueará las peticiones por CORS.
+Las variables de entorno se cargan **en Render**, nunca en el repositorio: son
+las mismas de `backend/.env`. Health check en `/api/salud`.
+
+**`FRONTEND_ORIGINS` debe incluir el dominio de Vercel**, si no el navegador
+bloquea todo por CORS. Hoy tiene los tres alias de producción más
+`http://localhost:5173` para desarrollo. Ojo: los *preview deployments* de
+Vercel usan dominios aleatorios que no están en la lista, así que solo funciona
+producción.
 
 ---
 
