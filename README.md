@@ -15,12 +15,31 @@ Los montos van en Soles (S/) y toda la interfaz está en español.
 | Docs de la API | <https://finanzas-ia-api.onrender.com/docs> |
 | Repositorio | <https://github.com/chocolatito27/finanzas-ia> |
 
-El frontend está en Vercel y el backend en el plan gratuito de Render, que
-**duerme tras 15 minutos sin tráfico**: la primera visita después de un rato
-espera ~1 minuto a que despierte, y recién ahí empieza a procesar. Para quitarlo
-hay que pasar a un plan pago (~$7/mes en Render, ~$5/mes en Railway).
+El frontend está en Vercel y el backend en el plan gratuito de Render. Cada
+`git push` a `main` redespliega ambos automáticamente.
 
-Cada `git push` a `main` redespliega ambos automáticamente.
+### Por qué el backend a veces tarda en responder
+
+Render duerme los servicios gratuitos tras 15 minutos sin tráfico, y despertarlos
+toma ~1 minuto. Como procesar un PDF ya tarda 30–60 s, un usuario que llega en
+frío esperaría casi dos minutos.
+
+Para mitigarlo, `.github/workflows/mantener-despierto.yml` le pega cada 10
+minutos **solo de 7:00 a 23:00 hora de Perú**, no las 24 h. El motivo es el
+límite del plan: Render da **750 horas de instancia al mes** y mantenerlo
+despierto todo el día consume ~730, sin margen — si te pasas, el servicio se
+suspende hasta el mes siguiente. En horario de atención son ~480 h/mes.
+
+Limitaciones que conviene tener presentes:
+
+- GitHub no garantiza la puntualidad del cron; puede retrasarse algunos minutos.
+- **GitHub desactiva los workflows programados si el repositorio pasa 60 días
+  sin actividad.** Si el backend vuelve a dormirse, revisa eso primero.
+- No elimina el arranque en frío que ocurre después de cada despliegue.
+- Fuera del horario configurado, sigue durmiendo.
+
+La solución de verdad es pasar a un plan pago (~$7/mes en Render). Ahí se borra
+el workflow y se acabó el problema.
 
 ---
 
