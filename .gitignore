@@ -1,0 +1,33 @@
+# Secretos — NUNCA subir a git
+.env
+.env.*
+!.env.example
+*.local
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# Node
+node_modules/
+dist/
+dist-ssr/
+.vite/
+
+# Editores / SO
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Archivos subidos por usuarios en pruebas locales
+backend/uploads/
+backend/tests/samples/*.pdf
+!backend/tests/samples/ejemplo_bcp.pdf
+
+# Vercel
+.vercel

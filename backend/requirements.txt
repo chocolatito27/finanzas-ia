@@ -1,0 +1,13 @@
+fastapi
+uvicorn[standard]
+pdfplumber
+openpyxl
+pikepdf
+openai
+supabase
+python-dotenv
+python-multipart
+httpx
+pyjwt
+cryptography
+reportlab      # solo para generar PDFs de prueba en tests/
