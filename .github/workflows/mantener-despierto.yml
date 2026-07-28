@@ -1,0 +1,62 @@
+# Mantiene despierto el backend de Render durante el horario de atención.
+#
+# Render duerme un servicio del plan gratuito tras 15 minutos sin tráfico, y
+# despertarlo tarda ~1 minuto. Como procesar un PDF ya toma 30-60 s, un usuario
+# que llega en frío esperaría casi dos minutos. Este workflow le pega cada 10
+# minutos para que no alcance a dormirse.
+#
+# POR QUÉ SOLO EN HORARIO DE ATENCIÓN, y no 24/7:
+# el plan gratuito de Render da 750 horas de instancia al mes. Mantenerlo
+# despierto todo el día consume ~730 h y deja sin margen: si te pasas, el
+# servicio se suspende hasta el mes siguiente. De 7:00 a 23:00 hora de Perú son
+# ~480 h/mes, con holgura de sobra.
+#
+# Perú es UTC-5, así que 07:00-23:00 local = 12:00-04:00 UTC.
+#
+# LIMITACIONES CONOCIDAS:
+#  - GitHub no garantiza la puntualidad del cron; bajo carga puede retrasarse
+#    varios minutos. Con ventana de 15 min y ping cada 10, tolera un retraso.
+#  - GitHub desactiva los workflows programados si el repositorio pasa 60 días
+#    sin actividad. Si el backend empieza a dormirse, revisa eso primero.
+#  - Esto no elimina el arranque en frío después de cada despliegue.
+#
+# La solución definitiva es pasar a un plan pago (~$7/mes en Render). Entonces
+# este workflow se puede borrar.
+
+name: Mantener despierto el backend
+
+on:
+  schedule:
+    - cron: '*/10 0-4,12-23 * * *'
+  workflow_dispatch: # permite dispararlo a mano desde la pestaña Actions
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Despertar la API
+        run: |
+          echo "Consultando el health check de la API..."
+          # --max-time 120: si estaba dormido, tarda ~1 min en responder
+          codigo=$(curl -s -o /tmp/respuesta.json -w "%{http_code}" \
+            --max-time 120 \
+            https://finanzas-ia-api.onrender.com/api/salud)
+
+          echo "HTTP $codigo"
+          cat /tmp/respuesta.json
+          echo
+
+          if [ "$codigo" != "200" ]; then
+            echo "::error::La API respondió $codigo en vez de 200"
+            exit 1
+          fi
+
+          # El health check informa si falta alguna variable de entorno;
+          # que responda 200 no significa que esté bien configurada.
+          if ! grep -q '"ok":true' /tmp/respuesta.json; then
+            echo "::error::La API responde pero le faltan variables de entorno"
+            exit 1
+          fi
+
+          echo "API despierta y bien configurada."
