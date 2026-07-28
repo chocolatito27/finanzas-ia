@@ -33,7 +33,9 @@ VARIABLES = {
         "4SvgHVBXGjgCAK20dH5YA-zQYvLF6bmYysZU7CDAAFI"
     ),
     "VITE_API_URL": "https://finanzas-ia-api.onrender.com",
-    "VITE_WHATSAPP_NUMBER": "51999999999",
+    # Respaldo: el valor que manda es el WHATSAPP_NUMBER del backend, que se lee
+    # en tiempo de ejecución. Este solo se usa si la API no responde.
+    "VITE_WHATSAPP_NUMBER": "6285640549937",
     "VITE_ADMIN_EMAILS": "gustavo.araujot@unmsm.edu.pe,tomasaraujotejada2007@gmail.com",
 }
 
@@ -83,7 +85,7 @@ def main() -> int:
         )
         print(f"  creada   {clave}  ({len(valor)} caracteres)")
 
-    # Verificación: se relee lo guardado y se compara byte a byte
+    # Verificación: se relee lo guardado y se compara carácter a carácter
     print("\nVerificando lo que quedó guardado:")
     guardadas = pedir("GET", f"/v10/projects/{PROYECTO}/env?decrypt=true").get("envs", [])
     fallos = 0
