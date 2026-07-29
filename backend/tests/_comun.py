@@ -93,6 +93,30 @@ def limpiar_ejemplos(cliente: httpx.Client) -> int:
     return borrados
 
 
+def limpiar_todo(cliente: httpx.Client) -> int:
+    """Borra TODOS los archivos, pero solo si la sesión es la cuenta de QA.
+
+    `limpiar_ejemplos` filtra por nombre y no alcanza cuando una prueba sube el
+    mismo contenido con nombres arbitrarios (el caso de los nombres que entregan
+    los celulares): el archivo queda, y su hash hace que la subida siguiente se
+    rechace como duplicada.
+
+    La comprobación del email no es decorativa: es lo que impide que este borrado
+    se ejecute contra una cuenta real si alguien reutiliza la función.
+    """
+    perfil = cliente.get("/api/auth/perfil").json()
+    if (perfil.get("email") or "").lower() != EMAIL:
+        raise RuntimeError(
+            f"limpiar_todo solo opera sobre {EMAIL}, no sobre {perfil.get('email')}"
+        )
+
+    borrados = 0
+    for archivo in cliente.get("/api/archivos").json():
+        cliente.delete(f"/api/archivos/{archivo['id']}")
+        borrados += 1
+    return borrados
+
+
 def subir(cliente: httpx.Client, *nombres: str) -> list[dict]:
     """Sube archivos de tests/samples/ y devuelve los resultados."""
     archivos = []

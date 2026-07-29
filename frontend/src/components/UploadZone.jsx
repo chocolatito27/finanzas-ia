@@ -23,11 +23,64 @@ import { Button } from '@/components/ui/button'
 import { api } from '@/lib/api'
 import { cn, fechaPeru } from '@/lib/utils'
 
-const EXTENSIONES = '.pdf,.xlsx,.xlsm,.xls,.csv'
+// Los tipos MIME van junto a las extensiones porque en celular el selector de
+// archivos suele filtrar por MIME y no por extensión.
+const ACEPTADOS =
+  '.pdf,.xlsx,.xlsm,.csv,application/pdf,text/csv,' +
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+
+const EXTENSIONES = ['.pdf', '.xlsx', '.xlsm', '.csv']
+const MIMES = ['application/pdf', 'text/csv', 'spreadsheetml', 'excel']
 const MAX_ARCHIVOS = 12
+const MAX_MB = 15
 
 function iconoArchivo(nombre) {
   return nombre.toLowerCase().endsWith('.pdf') ? FileText : FileSpreadsheet
+}
+
+/**
+ * Decide si un archivo se acepta en la lista.
+ *
+ * Es deliberadamente permisivo. Antes se filtraba solo por la extensión del
+ * nombre y **se descartaba en silencio** todo lo demás: en celular, donde el
+ * selector de archivos (Google Drive, Archivos, adjuntos de WhatsApp) entrega
+ * nombres sin extensión o genéricos tipo "Documento", el usuario elegía su PDF
+ * y no pasaba absolutamente nada, sin mensaje alguno.
+ *
+ * Ahora, si el nombre no dice nada útil, se deja pasar y decide el backend, que
+ * mira los bytes del archivo. Es mejor mandar algo dudoso y recibir un error
+ * claro que rechazarlo sin explicación.
+ */
+function revisar(archivo) {
+  if (archivo.size === 0) {
+    return { ok: false, motivo: 'está vacío' }
+  }
+  if (archivo.size > MAX_MB * 1024 * 1024) {
+    return { ok: false, motivo: `pesa más de ${MAX_MB} MB` }
+  }
+
+  const nombre = (archivo.name || '').toLowerCase()
+  const tipo = (archivo.type || '').toLowerCase()
+
+  if (EXTENSIONES.some((e) => nombre.endsWith(e))) return { ok: true }
+  if (MIMES.some((m) => tipo.includes(m))) return { ok: true }
+
+  // Formatos que claramente no sirven: se atajan acá con un mensaje útil
+  if (tipo.startsWith('image/')) {
+    return {
+      ok: false,
+      motivo: 'es una imagen. Necesitamos el PDF que descargas del banco, no una foto',
+    }
+  }
+  if (nombre.endsWith('.xls')) {
+    return {
+      ok: false,
+      motivo: 'es un Excel antiguo (.xls). Ábrelo y guárdalo como .xlsx',
+    }
+  }
+
+  // Sin extensión ni tipo reconocible: que decida el backend por el contenido
+  return { ok: true }
 }
 
 export default function UploadZone({ onProcesado, onPedirClave }) {
@@ -39,12 +92,38 @@ export default function UploadZone({ onProcesado, onPedirClave }) {
   const [error, setError] = useState(null)
 
   function agregar(lista) {
-    const nuevos = Array.from(lista).filter((archivo) =>
-      EXTENSIONES.split(',').some((ext) => archivo.name.toLowerCase().endsWith(ext)),
-    )
-    setSeleccionados((previos) => [...previos, ...nuevos].slice(0, MAX_ARCHIVOS))
+    const archivos = Array.from(lista || [])
     setResultados(null)
     setError(null)
+
+    if (archivos.length === 0) return
+
+    const aceptados = []
+    const rechazados = []
+    for (const archivo of archivos) {
+      const veredicto = revisar(archivo)
+      if (veredicto.ok) aceptados.push(archivo)
+      else rechazados.push(`${archivo.name || 'el archivo'} ${veredicto.motivo}`)
+    }
+
+    // Nunca descartar en silencio: si algo no entra, hay que decir por qué.
+    if (rechazados.length) {
+      setError(
+        rechazados.length === 1
+          ? `No se puede subir: ${rechazados[0]}.`
+          : `No se pudieron subir ${rechazados.length} archivos: ${rechazados.join('; ')}.`,
+      )
+    }
+
+    if (aceptados.length) {
+      setSeleccionados((previos) => {
+        const total = [...previos, ...aceptados]
+        if (total.length > MAX_ARCHIVOS) {
+          setError(`Máximo ${MAX_ARCHIVOS} archivos por vez.`)
+        }
+        return total.slice(0, MAX_ARCHIVOS)
+      })
+    }
   }
 
   function quitar(indice) {
@@ -73,8 +152,14 @@ export default function UploadZone({ onProcesado, onPedirClave }) {
 
   return (
     <div>
-      {/* --- Zona de drop --- */}
-      <div
+      {/* --- Zona de subida ---
+           Toda la zona es un botón: en celular no se puede arrastrar, y obligar a
+           acertarle a un botón chico dentro de un recuadro grande es una molestia
+           innecesaria. En pantalla ancha además acepta arrastrar. */}
+      <button
+        type="button"
+        onClick={() => inputRef.current?.click()}
+        disabled={subiendo}
         onDragOver={(e) => {
           e.preventDefault()
           setArrastrando(true)
@@ -86,37 +171,44 @@ export default function UploadZone({ onProcesado, onPedirClave }) {
           agregar(e.dataTransfer.files)
         }}
         className={cn(
-          'rounded-xl border border-dashed px-6 py-10 text-center transition-colors',
+          'w-full rounded-xl border border-dashed px-6 py-9 text-center transition-colors',
+          'disabled:opacity-60 disabled:cursor-not-allowed',
           arrastrando
             ? 'border-primary bg-primary/8'
-            : 'border-white/15 hover:border-white/25',
+            : 'border-white/15 hover:border-white/25 active:bg-white/4',
         )}
       >
         <UploadCloud className="mx-auto size-9 text-muted-foreground" />
-        <p className="mt-3 text-foreground font-medium">
-          Arrastra tus estados de cuenta aquí
-        </p>
-        <p className="mt-1 text-sm text-muted-foreground">
-          PDF o Excel · hasta {MAX_ARCHIVOS} archivos · 15 MB cada uno
-        </p>
-        <Button
-          type="button"
-          variant="secondary"
-          className="mt-4"
-          onClick={() => inputRef.current?.click()}
-          disabled={subiendo}
-        >
+        <span className="mt-3 block text-foreground font-medium">
+          {/* El texto cambia según el tamaño: en celular no hay nada que arrastrar */}
+          <span className="sm:hidden">Toca para elegir tus estados de cuenta</span>
+          <span className="hidden sm:inline">
+            Arrastra tus estados de cuenta aquí o toca para elegirlos
+          </span>
+        </span>
+        <span className="mt-1 block text-sm text-muted-foreground">
+          PDF o Excel · hasta {MAX_ARCHIVOS} archivos · {MAX_MB} MB cada uno
+        </span>
+        <span className="mt-4 inline-block rounded-lg bg-secondary px-3 py-2 text-sm font-medium text-secondary-foreground">
           Seleccionar archivos
-        </Button>
-        <input
-          ref={inputRef}
-          type="file"
-          multiple
-          accept={EXTENSIONES}
-          className="hidden"
-          onChange={(e) => agregar(e.target.files)}
-        />
-      </div>
+        </span>
+      </button>
+
+      {/* Fuera del <button>: un input dentro de un botón es HTML inválido y el
+          clic se dispararía dos veces. */}
+      <input
+        ref={inputRef}
+        type="file"
+        multiple
+        accept={ACEPTADOS}
+        className="hidden"
+        onChange={(e) => {
+          agregar(e.target.files)
+          // Se limpia para que elegir el mismo archivo dos veces vuelva a
+          // disparar onChange (en celular pasa seguido al reintentar).
+          e.target.value = ''
+        }}
+      />
 
       {/* --- Lista de seleccionados --- */}
       {seleccionados.length > 0 && (
