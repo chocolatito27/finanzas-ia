@@ -1,0 +1,96 @@
+# Despliega el backend en Render cuando cambia algo de backend/.
+#
+# POR QUÉ EXISTE ESTE WORKFLOW:
+# el servicio de Render se creó por API apuntando a la URL de un repositorio
+# público, no conectando la cuenta de GitHub. Render quedó con auto-deploy
+# activado, pero GitHub nunca le instaló el webhook, así que los push no le
+# llegaban: el backend se quedó dos commits atrás sin que nada avisara, y el
+# arreglo de la subida desde el celular no llegó a producción hasta que se
+# disparó a mano.
+#
+# Este workflow cierra ese hueco llamando a la API de Render directamente.
+# Si algún día conectas el repositorio desde el panel de Render, el webhook
+# nativo hace lo mismo y este archivo se puede borrar.
+#
+# Los secretos RENDER_API_KEY y RENDER_SERVICE_ID están en
+# Settings > Secrets and variables > Actions del repositorio.
+
+name: Desplegar backend
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/desplegar-backend.yml'
+  workflow_dispatch:
+
+# Si llegan varios push seguidos, solo interesa desplegar el último
+concurrency:
+  group: desplegar-backend
+  cancel-in-progress: false
+
+jobs:
+  desplegar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Lanzar el despliegue en Render
+        id: lanzar
+        run: |
+          respuesta=$(curl -sS -X POST \
+            -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{}' \
+            "https://api.render.com/v1/services/${{ secrets.RENDER_SERVICE_ID }}/deploys")
+
+          id=$(echo "$respuesta" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+          if [ -z "$id" ]; then
+            echo "::error::Render no devolvió un id de despliegue: $respuesta"
+            exit 1
+          fi
+          echo "deploy_id=$id" >> "$GITHUB_OUTPUT"
+          echo "Despliegue lanzado: $id"
+
+      - name: Esperar a que quede en vivo
+        run: |
+          id="${{ steps.lanzar.outputs.deploy_id }}"
+          for intento in $(seq 1 60); do
+            estado=$(curl -sS \
+              -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+              "https://api.render.com/v1/services/${{ secrets.RENDER_SERVICE_ID }}/deploys/$id" \
+              | grep -o '"status":"[^"]*"' | head -1 | cut -d'"' -f4)
+
+            echo "[$((intento * 10))s] $estado"
+
+            case "$estado" in
+              live)
+                echo "Backend en vivo."
+                exit 0
+                ;;
+              build_failed|update_failed|canceled|pre_deploy_failed)
+                echo "::error::El despliegue terminó en '$estado'. Revisa los logs en Render."
+                exit 1
+                ;;
+            esac
+            sleep 10
+          done
+          echo "::error::Se agotó la espera de 10 minutos."
+          exit 1
+
+      - name: Comprobar que responde y está bien configurado
+        run: |
+          # --max-time 120 porque el plan gratuito tarda en levantar tras el deploy
+          codigo=$(curl -sS -o /tmp/salud.json -w "%{http_code}" --max-time 120 \
+            https://finanzas-ia-api.onrender.com/api/salud)
+          cat /tmp/salud.json; echo
+
+          if [ "$codigo" != "200" ]; then
+            echo "::error::La API respondió $codigo"
+            exit 1
+          fi
+          if ! grep -q '"ok":true' /tmp/salud.json; then
+            echo "::error::La API responde pero le faltan variables de entorno"
+            exit 1
+          fi
+          echo "Backend desplegado y verificado."

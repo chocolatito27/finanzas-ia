@@ -15,8 +15,18 @@ Los montos van en Soles (S/) y toda la interfaz está en español.
 | Docs de la API | <https://finanzas-ia-api.onrender.com/docs> |
 | Repositorio | <https://github.com/chocolatito27/finanzas-ia> |
 
-El frontend está en Vercel y el backend en el plan gratuito de Render. Cada
-`git push` a `main` redespliega ambos automáticamente.
+El frontend está en Vercel y el backend en el plan gratuito de Render.
+
+**Despliegue automático.** Vercel redespliega el frontend en cada push. El backend
+lo hace el workflow `.github/workflows/desplegar-backend.yml`, no Render por sí
+solo: el servicio se creó por API apuntando a la URL del repositorio público, y
+GitHub nunca le instaló el webhook. Render quedaba dos commits atrás sin avisar
+nada. El workflow llama a su API y además comprueba `/api/salud` al terminar, así
+que un despliegue roto falla visible en la pestaña Actions en vez de pasar
+desapercibido.
+
+Si algún día conectas el repositorio desde el panel de Render, el webhook nativo
+hace lo mismo y ese workflow se puede borrar.
 
 ### Por qué el backend a veces tarda en responder
 
