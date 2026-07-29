@@ -213,6 +213,64 @@ Para borrar cualquiera de las dos cuentas: Supabase → Authentication → Users
 
 ---
 
+## Cómo dar acceso a un cliente
+
+La web es pública: cualquiera puede entrar y registrarse. Lo que **no** puede es
+usarla — el backend responde 403 a todos los endpoints de datos hasta que la
+cuenta esté activada a mano. Ese es el candado del negocio.
+
+### Antes de nada: crea tu cuenta de admin
+
+`/admin` solo lo ve quien tenga un email listado en `ADMIN_EMAILS` (hoy
+`gustavo.araujot@unmsm.edu.pe` y `tomasaraujotejada2007@gmail.com`). Estar en la
+lista no basta: hace falta **tener una cuenta con ese email**.
+
+Regístrate en <https://finanzas-ia-lake.vercel.app/registro> con uno de esos dos
+correos. Entras de inmediato y el enlace "Admin" aparece solo en la cabecera. Un
+admin salta la validación de suscripción, así que no necesita que nadie lo active.
+
+### Después, por cada cliente
+
+1. El cliente entra a la web y hace clic en **"Quiero suscribirme"** → se abre
+   WhatsApp contigo con el mensaje ya escrito.
+2. Coordinas el pago por Yape o Plin.
+3. El cliente crea su cuenta en **/registro** (email y contraseña que él elija).
+4. Entras a **/admin**, lo buscas por email y le das **"Activar"**.
+5. El cliente recarga y ya entra: onboarding, subir estados de cuenta, dashboard.
+
+Si el cliente se registra antes de pagar, ve una pantalla que lo manda a
+WhatsApp. No pierde nada; queda esperando en tu panel.
+
+Para desactivar a alguien que dejó de pagar: mismo panel, botón **"Desactivar"**.
+Sus datos se conservan; solo pierde el acceso.
+
+### Ver el estado de todos desde la terminal
+
+```bash
+cd backend
+.venv\Scripts\python tests\ver_usuarios.py
+```
+
+Lista cada cuenta con si está confirmada, activa y si completó el onboarding, y
+avisa si un email de `ADMIN_EMAILS` no tiene cuenta creada.
+
+### Sobre la confirmación por email
+
+Está **desactivada** a propósito. Supabase solo trae un servicio de correo de
+pruebas, limitado a unos pocos envíos por hora, así que con la confirmación
+activada los registros reales se quedaban trabados o el enlace apuntaba a
+`localhost`.
+
+No debilita nada: la cuenta nace inactiva y sirve para nada hasta que tú la
+apruebas, y a esa persona ya la verificaste por WhatsApp cobrándole. El correo no
+es lo que da confianza acá; el pago sí.
+
+Si más adelante quieres activarla (por ejemplo para "olvidé mi contraseña"),
+hay que conectar un SMTP propio — Resend o SendGrid tienen capa gratis — en
+Supabase → Authentication → Emails → SMTP Settings.
+
+---
+
 ## Flujo del producto
 
 ```
