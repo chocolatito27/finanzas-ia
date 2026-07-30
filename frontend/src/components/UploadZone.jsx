@@ -90,7 +90,7 @@ export default function UploadZone({ onProcesado, onClaveGuardada }) {
   const [guardandoClave, setGuardandoClave] = useState(false)
   const resultadosRef = useRef(null)
 
-  function agregar(lista) {
+  async function agregar(lista) {
     const archivos = Array.from(lista || [])
     setResultados(null)
     setError(null)
@@ -122,34 +122,46 @@ export default function UploadZone({ onProcesado, onClaveGuardada }) {
       )
     }
 
-    if (aceptados.length) {
-      setSeleccionados((previos) => {
-        const total = [...previos, ...aceptados]
-        if (total.length > MAX_ARCHIVOS) {
-          setError(`Máximo ${MAX_ARCHIVOS} archivos por vez.`)
-        }
-        return total.slice(0, MAX_ARCHIVOS)
-      })
+    if (!aceptados.length) return
 
-      // En celular la lista y el botón "Procesar" quedan debajo del pliegue: el
-      // archivo sí se agregó, pero sin ver el botón parece que no pasó nada.
-      requestAnimationFrame(() => {
-        listaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-      })
+    const total = [...seleccionados, ...aceptados].slice(0, MAX_ARCHIVOS)
+    if (seleccionados.length + aceptados.length > MAX_ARCHIVOS) {
+      setError(`Máximo ${MAX_ARCHIVOS} archivos por vez.`)
     }
+    setSeleccionados(total)
+
+    requestAnimationFrame(() => {
+      listaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    })
+
+    // Se procesa de una vez, sin pedir un segundo toque.
+    //
+    // Antes había que elegir el archivo y DESPUÉS tocar "Procesar". En celular ese
+    // botón queda debajo del pliegue y nadie lo tocaba: los registros del servidor
+    // mostraban que el archivo se elegía bien pero la petición de subida no salía
+    // nunca. Elegir un archivo ya expresa la intención de subirlo; no hace falta
+    // confirmarla.
+    await procesar(total)
   }
 
   function quitar(indice) {
     setSeleccionados((previos) => previos.filter((_, i) => i !== indice))
   }
 
-  async function procesar() {
-    if (!seleccionados.length) return
+  /**
+   * Sube y procesa los archivos.
+   *
+   * Recibe la lista por parámetro en vez de leer el estado porque se llama
+   * inmediatamente después de `setSeleccionados`, y ese estado todavía no se ha
+   * actualizado en ese momento.
+   */
+  async function procesar(lista = seleccionados) {
+    if (!lista.length) return
     setSubiendo(true)
     setError(null)
     setResultados(null)
     try {
-      const respuesta = await api.subirArchivos(seleccionados)
+      const respuesta = await api.subirArchivos(lista)
       setResultados(respuesta.resultados)
 
       // Solo se quitan de la lista los que SÍ se procesaron. Antes se vaciaba
@@ -292,9 +304,9 @@ export default function UploadZone({ onProcesado, onClaveGuardada }) {
       {seleccionados.length > 0 && (
         <div ref={listaRef} className="mt-4 space-y-2">
           <p className="text-sm text-foreground">
-            {seleccionados.length}{' '}
-            {seleccionados.length === 1 ? 'archivo listo' : 'archivos listos'} para
-            procesar:
+            {subiendo
+              ? `Procesando ${seleccionados.length} ${seleccionados.length === 1 ? 'archivo' : 'archivos'}…`
+              : `${seleccionados.length} ${seleccionados.length === 1 ? 'archivo pendiente' : 'archivos pendientes'}:`}
           </p>
           {seleccionados.map((archivo, indice) => {
             const Icono = iconoArchivo(archivo.name)
@@ -321,16 +333,20 @@ export default function UploadZone({ onProcesado, onClaveGuardada }) {
             )
           })}
 
-          <Button onClick={procesar} disabled={subiendo} className="w-full mt-2">
-            {subiendo ? (
-              <>
-                <Loader2 className="size-4 animate-spin" />
+          {subiendo ? (
+            <div className="mt-2 flex items-center justify-center gap-2 rounded-xl border border-primary/25 bg-primary/8 px-4 py-3">
+              <Loader2 className="size-4 animate-spin text-acento-suave" />
+              <span className="text-sm text-foreground">
                 Leyendo y categorizando con IA…
-              </>
-            ) : (
-              `Procesar ${seleccionados.length} archivo${seleccionados.length === 1 ? '' : 's'}`
-            )}
-          </Button>
+              </span>
+            </div>
+          ) : (
+            /* Solo para reintentar: la subida arranca sola al elegir el archivo */
+            <Button onClick={() => procesar()} className="w-full mt-2">
+              Reintentar {seleccionados.length}{' '}
+              {seleccionados.length === 1 ? 'archivo' : 'archivos'}
+            </Button>
+          )}
 
           {subiendo && (
             <p className="text-center text-xs text-muted-foreground">
