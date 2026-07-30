@@ -20,6 +20,7 @@ import {
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { api } from '@/lib/api'
 import { cn, fechaPeru } from '@/lib/utils'
 
@@ -77,7 +78,7 @@ function revisar(archivo) {
   return { ok: true }
 }
 
-export default function UploadZone({ onProcesado, onPedirClave }) {
+export default function UploadZone({ onProcesado, onClaveGuardada }) {
   const inputRef = useRef(null)
   const listaRef = useRef(null)
   const [seleccionados, setSeleccionados] = useState([])
@@ -85,6 +86,8 @@ export default function UploadZone({ onProcesado, onPedirClave }) {
   const [arrastrando, setArrastrando] = useState(false)
   const [resultados, setResultados] = useState(null)
   const [error, setError] = useState(null)
+  const [clavePdf, setClavePdf] = useState('')
+  const [guardandoClave, setGuardandoClave] = useState(false)
   const resultadosRef = useRef(null)
 
   function agregar(lista) {
@@ -148,8 +151,17 @@ export default function UploadZone({ onProcesado, onPedirClave }) {
     try {
       const respuesta = await api.subirArchivos(seleccionados)
       setResultados(respuesta.resultados)
-      setSeleccionados([])
-      if (inputRef.current) inputRef.current.value = ''
+
+      // Solo se quitan de la lista los que SÍ se procesaron. Antes se vaciaba
+      // entera: la lista y el botón desaparecían de golpe, el contenido saltaba
+      // hacia arriba —parecía que la página se había recargado— y encima había
+      // que volver a elegir el archivo para reintentar. En celular, donde el
+      // resultado queda fuera de pantalla, eso se leía como "no pasó nada".
+      const fallados = new Set(
+        respuesta.resultados.filter((r) => !r.ok).map((r) => r.nombre_archivo),
+      )
+      setSeleccionados((previos) => previos.filter((a) => fallados.has(a.name)))
+
       if (respuesta.total_movimientos > 0) onProcesado?.()
     } catch (e) {
       setError(e.message)
@@ -165,6 +177,34 @@ export default function UploadZone({ onProcesado, onPedirClave }) {
   }
 
   const hayClaveMala = resultados?.some((r) => r.codigo_error === 'PDF_PROTEGIDO')
+
+  /**
+   * Guarda la clave y reintenta la subida sin que el usuario tenga que volver a
+   * elegir el archivo.
+   *
+   * Antes esto eran cinco pasos: leer el error, encontrar el enlace de la clave,
+   * abrir el formulario, guardarla y volver a seleccionar el archivo (que además
+   * ya se había perdido). En celular era motivo suficiente para abandonar.
+   */
+  async function guardarClaveYReintentar(evento) {
+    evento.preventDefault()
+    const limpia = clavePdf.trim()
+    if (!limpia) return
+
+    setGuardandoClave(true)
+    setError(null)
+    try {
+      await api.actualizarClavePdf(limpia)
+      setClavePdf('')
+      onClaveGuardada?.()
+      // Los archivos que fallaron siguen en la lista, así que se reintenta solo
+      if (seleccionados.length) await procesar()
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setGuardandoClave(false)
+    }
+  }
 
   return (
     <div>
@@ -344,11 +384,46 @@ export default function UploadZone({ onProcesado, onPedirClave }) {
             </div>
           ))}
 
-          {hayClaveMala && onPedirClave && (
-            <Button variant="secondary" className="w-full" onClick={onPedirClave}>
-              <KeyRound className="size-4" />
-              Actualizar la clave de mis PDFs
-            </Button>
+          {/* El formulario aparece acá mismo, pegado al error que lo motiva, y
+              al guardar reintenta solo. Antes era un enlace que abría otro
+              formulario en otra parte de la página, y para entonces el archivo
+              ya se había perdido. */}
+          {hayClaveMala && (
+            <form
+              onSubmit={guardarClaveYReintentar}
+              className="rounded-xl border border-white/10 bg-white/3 p-4"
+            >
+              <div className="flex items-center gap-2">
+                <KeyRound className="size-4 text-muted-foreground" />
+                <p className="text-sm font-medium text-foreground">
+                  Escribe la clave de tus PDFs del banco
+                </p>
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Normalmente es el DNI del titular de la cuenta, sin guiones ni
+                espacios.
+              </p>
+              <Input
+                type="password"
+                inputMode="numeric"
+                autoComplete="off"
+                maxLength={64}
+                value={clavePdf}
+                onChange={(e) => setClavePdf(e.target.value)}
+                placeholder="Ej. 12345678"
+                className="mt-3"
+              />
+              <Button
+                type="submit"
+                className="mt-3 w-full"
+                disabled={guardandoClave || subiendo || !clavePdf.trim()}
+              >
+                {(guardandoClave || subiendo) && (
+                  <Loader2 className="size-4 animate-spin" />
+                )}
+                Guardar clave y reintentar
+              </Button>
+            </form>
           )}
         </div>
       )}

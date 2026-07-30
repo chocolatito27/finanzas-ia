@@ -256,8 +256,15 @@ def abrir_pdf(contenido: bytes, clave: str | None = None) -> bytes:
     except pikepdf.PasswordError:
         pass
     except Exception as exc:  # PDF corrupto o no es un PDF
+        # El texto de pikepdf trae objetos de Python en crudo ("stream
+        # <_io.BytesIO object at 0x...>"), que al usuario no le dice nada y
+        # además expone detalles internos. Se registra completo y se muestra
+        # algo accionable.
+        logger.warning("PDF no se pudo abrir: %s", exc)
         raise ErrorExtraccion(
-            f"El archivo no se pudo abrir como PDF: {exc}", "PDF_INVALIDO"
+            "El archivo está dañado o no es un PDF válido. Vuelve a descargarlo "
+            "desde tu banca por internet e inténtalo de nuevo.",
+            "PDF_INVALIDO",
         ) from exc
 
     if not clave:

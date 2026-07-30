@@ -206,10 +206,7 @@ export default function DashboardPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <UploadZone
-            onProcesado={refrescar}
-            onPedirClave={() => setMostrarClave(true)}
-          />
+          <UploadZone onProcesado={refrescar} onClaveGuardada={recargarPerfil} />
 
           {/* Siempre accesible: antes solo aparecía después de que fallara una
               subida, y era el único camino para corregir una clave equivocada. */}
