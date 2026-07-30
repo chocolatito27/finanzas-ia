@@ -165,8 +165,10 @@ export default function UploadZone({ onProcesado, onPedirClave }) {
            Toda la zona es un botón: en celular no se puede arrastrar, y obligar a
            acertarle a un botón chico dentro de un recuadro grande es una molestia
            innecesaria. En pantalla ancha además acepta arrastrar. */}
-      <label
-        htmlFor="entrada-archivos"
+      {/* Es un div y no un <label>: con el input encima a tamaño completo, un
+          label apuntando al mismo input dispara el evento dos veces en algunos
+          navegadores. */}
+      <div
         onDragOver={(e) => {
           e.preventDefault()
           setArrastrando(true)
@@ -178,7 +180,8 @@ export default function UploadZone({ onProcesado, onPedirClave }) {
           agregar(e.dataTransfer.files)
         }}
         className={cn(
-          'block w-full rounded-xl border border-dashed px-6 py-9 text-center transition-colors',
+          // relative: el input se estira encima de toda la zona (ver abajo)
+          'relative block w-full rounded-xl border border-dashed px-6 py-9 text-center transition-colors',
           subiendo
             ? 'pointer-events-none opacity-60'
             : 'cursor-pointer active:bg-white/4',
@@ -202,24 +205,32 @@ export default function UploadZone({ onProcesado, onPedirClave }) {
           Seleccionar archivos
         </span>
 
-        {/* El input va DENTRO del label y con `sr-only`, no con `hidden`.
-            `hidden` es display:none, y varios navegadores de celular se niegan a
-            abrir el selector de un input así, o lo abren y descartan el evento
-            change: el usuario elegía su archivo y no pasaba absolutamente nada,
-            ni un mensaje. Con el label nativo el toque llega directo al control
-            del sistema y no hace falta ningún .click() por JavaScript.
+        {/* El input se estira transparente sobre TODA la zona, en vez de estar
+            escondido en una esquina.
 
-            Tampoco lleva `accept`: en Android, filtrar por tipo hace que varios
+            Historia de este bloque, porque importa: primero estaba con la clase
+            `hidden` (display:none) y se abría con un .click() por JavaScript —
+            varios navegadores de celular ignoran eso, y el usuario elegía su
+            archivo sin que pasara nada. Después pasó a `sr-only` dentro de un
+            <label>, que es el patrón recomendado, y en Chrome de Android tampoco
+            funcionó.
+
+            Esto es lo más compatible que existe: el dedo del usuario toca el
+            input de verdad, a tamaño completo. No hay label que reenvíe el
+            evento, ni .click() sintético, ni un control de 1px que el navegador
+            pueda considerar no interactuable.
+
+            Sin `accept` a propósito: en Android, filtrar por tipo hace que varios
             gestores de archivos muestren los PDF en gris y no se puedan elegir.
-            Es peor esconderle el archivo al usuario que aceptarlo y explicarle
-            después; el formato real se valida por el contenido en el backend. */}
+            El formato real se valida por el contenido en el backend. */}
         <input
           id="entrada-archivos"
           ref={inputRef}
           type="file"
           multiple
           disabled={subiendo}
-          className="sr-only"
+          aria-label="Seleccionar estados de cuenta"
+          className="absolute inset-0 size-full cursor-pointer opacity-0"
           onClick={(e) => {
             // Limpiar acá permite volver a elegir el mismo archivo. Se hace antes
             // de que se abra el selector, no después de leer los archivos, porque
@@ -228,7 +239,7 @@ export default function UploadZone({ onProcesado, onPedirClave }) {
           }}
           onChange={(e) => agregar(e.target.files)}
         />
-      </label>
+      </div>
 
       {/* --- Lista de seleccionados --- */}
       {seleccionados.length > 0 && (

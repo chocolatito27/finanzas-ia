@@ -18,6 +18,7 @@ import {
   useLocation,
 } from "react-router-dom";
 
+import Diagnostico from "@/pages/Diagnostico";
 import Landing from "@/pages/Landing";
 import Login from "@/pages/Login";
 import Onboarding from "@/pages/Onboarding";
@@ -107,6 +108,10 @@ export default function App() {
             />
 
             <Route path="/onboarding" element={<RutaOnboarding />} />
+
+            {/* Pública a propósito: hay que poder abrirla desde el celular sin
+                pelear con la sesión. No expone datos de nadie. */}
+            <Route path="/diagnostico" element={<Diagnostico />} />
 
             <Route
               path="/dashboard"

@@ -130,4 +130,8 @@ export const api = {
 
   // --- público ---
   configPublica: () => pedir('/api/config-publica'),
+
+  // Diagnóstico del selector de archivos en celular (ver pages/Diagnostico.jsx)
+  enviarDiagnostico: (datos) =>
+    pedir('/api/diagnostico', { metodo: 'POST', cuerpo: datos }),
 }

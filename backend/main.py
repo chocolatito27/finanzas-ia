@@ -11,7 +11,7 @@ from __future__ import annotations
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request, status
+from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -88,6 +88,45 @@ async def salud() -> dict:
 async def config_publica() -> dict:
     """Datos no sensibles que el frontend necesita (número de WhatsApp)."""
     return {"whatsapp_number": settings.whatsapp_number}
+
+
+@app.post("/api/diagnostico", tags=["salud"])
+async def guardar_diagnostico(datos: dict, request: Request) -> dict:
+    """Recibe el registro de la página /diagnostico.
+
+    **Temporal.** Existe porque un fallo del selector de archivos que solo ocurre
+    en Chrome de Android no se puede reproducir en escritorio, y sin datos del
+    dispositivo real cada arreglo es una adivinanza. Cuando el problema esté
+    cerrado, borrar esto y la tabla `diagnosticos`.
+
+    Es público a propósito: hay que poder usarlo desde el celular sin pelear con
+    la sesión. Solo guarda lo que el propio navegador reporta de sí mismo.
+    """
+    from database import get_client
+
+    registro = datos.get("registro")
+    if not isinstance(registro, list):
+        registro = []
+
+    try:
+        get_client().table("diagnosticos").insert(
+            {
+                "agente": str(datos.get("agente") or "")[:1000],
+                "pantalla": str(datos.get("pantalla") or "")[:200],
+                "tactil": bool(datos.get("tactil")),
+                # Se recorta: es un diagnóstico, no un almacén de eventos
+                "registro": registro[:200],
+            }
+        ).execute()
+    except Exception:
+        logger.exception("No se pudo guardar el diagnóstico")
+        raise HTTPException(500, "No se pudo guardar el diagnóstico")
+
+    logger.info(
+        "Diagnóstico recibido de %s — %s eventos",
+        str(datos.get("agente"))[:120], len(registro),
+    )
+    return {"ok": True, "eventos_guardados": len(registro[:200])}
 
 
 app.include_router(auth.router)
