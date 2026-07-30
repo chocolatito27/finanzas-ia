@@ -31,6 +31,7 @@ export default function Diagnostico() {
   const [registro, setRegistro] = useState([])
   const [enviando, setEnviando] = useState(false)
   const [enviado, setEnviado] = useState(null)
+  const [ultimo, setUltimo] = useState(null)
   const refOculto = useRef(null)
 
   const anotar = (evento, datos = {}) =>
@@ -47,10 +48,11 @@ export default function Diagnostico() {
         archivos: archivos.map(describir),
       })
 
-      // Lo que de verdad falta saber: si la petición sale del celular y llega
-      // completa al servidor. El selector ya se comprobó que funciona.
       if (archivos.length === 0) return
       const archivo = archivos[0]
+      setUltimo(archivo)
+
+      // Paso 1: ¿la petición sale del celular y llega completa?
       anotar('subiendo al servidor…', { nombre: archivo.name, bytes: archivo.size })
       const inicio = performance.now()
       try {
@@ -66,6 +68,37 @@ export default function Diagnostico() {
           estado: err.estado,
         })
       }
+    }
+  }
+
+  /**
+   * Paso 2: el camino REAL, el mismo que usa el dashboard.
+   *
+   * Ya se sabe que el archivo llega al servidor. Lo que falta es qué contesta el
+   * procesamiento de verdad —con la clave guardada del usuario, la extracción y
+   * la IA— y si el problema es la petición o cómo se muestra el resultado.
+   */
+  async function probarSubidaReal() {
+    if (!ultimo) {
+      anotar('no hay archivo elegido todavía')
+      return
+    }
+    anotar('subida REAL (misma ruta que el dashboard)…', { nombre: ultimo.name })
+    const inicio = performance.now()
+    try {
+      const respuesta = await api.subirArchivos([ultimo])
+      anotar('respuesta de la subida real', {
+        ms: Math.round(performance.now() - inicio),
+        ...respuesta,
+      })
+    } catch (err) {
+      anotar('FALLÓ la subida real', {
+        ms: Math.round(performance.now() - inicio),
+        mensaje: err.message,
+        estado: err.estado,
+        sesionExpirada: err.sesionExpirada,
+        suscripcionInactiva: err.suscripcionInactiva,
+      })
     }
   }
 
@@ -169,6 +202,26 @@ export default function Diagnostico() {
               {z.render()}
             </div>
           ))}
+        </div>
+
+        {/* Paso 2: solo tiene sentido después de elegir un archivo */}
+        <div className="mt-6 rounded-xl border border-white/10 bg-white/3 p-4">
+          <p className="text-sm font-medium text-foreground">
+            Paso 2 · Probar el procesamiento real
+          </p>
+          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+            Usa exactamente la misma ruta que el dashboard: tu sesión, tu clave de
+            PDF guardada, la extracción y la IA. Puede tardar hasta 2 minutos.
+            {ultimo ? '' : ' Elige un archivo arriba primero.'}
+          </p>
+          <Button
+            variant="secondary"
+            className="mt-3 w-full"
+            onClick={probarSubidaReal}
+            disabled={!ultimo}
+          >
+            {ultimo ? `Procesar ${ultimo.name}` : 'Sin archivo elegido'}
+          </Button>
         </div>
 
         <div className="mt-8">

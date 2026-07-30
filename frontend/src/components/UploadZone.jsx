@@ -85,6 +85,7 @@ export default function UploadZone({ onProcesado, onPedirClave }) {
   const [arrastrando, setArrastrando] = useState(false)
   const [resultados, setResultados] = useState(null)
   const [error, setError] = useState(null)
+  const resultadosRef = useRef(null)
 
   function agregar(lista) {
     const archivos = Array.from(lista || [])
@@ -154,6 +155,12 @@ export default function UploadZone({ onProcesado, onPedirClave }) {
       setError(e.message)
     } finally {
       setSubiendo(false)
+      // El resultado —sobre todo cuando es un error— queda debajo del pliegue en
+      // celular. Sin esto, el usuario ve que el spinner se apaga y concluye que
+      // "no pasó nada", cuando en realidad hay un mensaje explicando qué falló.
+      requestAnimationFrame(() => {
+        resultadosRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      })
     }
   }
 
@@ -292,6 +299,9 @@ export default function UploadZone({ onProcesado, onPedirClave }) {
           )}
         </div>
       )}
+
+      {/* Ancla para desplazar la vista hasta el resultado en celular */}
+      <div ref={resultadosRef} />
 
       {error && (
         <p className="mt-4 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-red-300">

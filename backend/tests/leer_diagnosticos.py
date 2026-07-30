@@ -49,13 +49,12 @@ def main() -> int:
             print("  (VACÍO — el evento change nunca se disparó)")
         for evento in registro:
             print(f"\n  [{evento.get('t')}] {evento.get('evento')}")
-            if "cantidad" in evento:
-                print(f"      archivos recibidos: {evento['cantidad']}")
-            for archivo in evento.get("archivos") or []:
-                print(
-                    f"        nombre={archivo.get('nombre')!r}  "
-                    f"tamaño={archivo.get('tamano')}  tipo={archivo.get('tipo')!r}"
-                )
+            # Se imprime todo lo demás tal cual: el detalle de la respuesta del
+            # servidor es justamente lo que hay que mirar.
+            resto = {k: v for k, v in evento.items() if k not in ("t", "evento")}
+            if resto:
+                for linea in json.dumps(resto, indent=2, ensure_ascii=False).splitlines():
+                    print(f"      {linea}")
         print()
 
     return 0
