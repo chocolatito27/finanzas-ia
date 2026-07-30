@@ -7,7 +7,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 
-import { api } from './api'
+import { ErrorApi, api } from './api'
 import { esAdmin, supabase } from './supabase'
 
 const ContextoAuth = createContext(null)
@@ -15,14 +15,25 @@ const ContextoAuth = createContext(null)
 export function ProveedorAuth({ children }) {
   const [sesion, setSesion] = useState(null)
   const [perfil, setPerfil] = useState(null)
+  const [errorPerfil, setErrorPerfil] = useState(null)
   const [cargando, setCargando] = useState(true)
 
   const recargarPerfil = useCallback(async () => {
     try {
       setPerfil(await api.perfil())
-    } catch {
-      // Sin perfil la app sigue: el onboarding lo creará.
+      setErrorPerfil(null)
+    } catch (e) {
+      // No se puede tratar "no pude cargar el perfil" como "no completó el
+      // onboarding": eso mandaba al usuario a rellenar el onboarding cuando en
+      // realidad se le había vencido la sesión o el servidor no respondía.
       setPerfil(null)
+      setErrorPerfil(e)
+
+      if (e instanceof ErrorApi && e.sesionExpirada) {
+        // Sesión vencida: cerrarla lleva a /login, que es lo que corresponde.
+        // En celular pasa a menudo, porque el teléfono deja la pestaña dormida.
+        await supabase.auth.signOut()
+      }
     }
   }, [])
 
@@ -73,6 +84,10 @@ export function ProveedorAuth({ children }) {
       usuario: sesion?.user ?? null,
       email,
       perfil,
+      errorPerfil,
+      // Distingue "el perfil cargó" de "no se pudo cargar": sin esto, un fallo de
+      // red se confundía con un onboarding pendiente.
+      perfilCargado: !!perfil,
       cargando,
       autenticado: !!sesion,
       // El admin entra siempre, aunque su propio perfil no esté marcado activo.
@@ -82,7 +97,7 @@ export function ProveedorAuth({ children }) {
       recargarPerfil,
       cerrarSesion,
     }
-  }, [sesion, perfil, cargando, recargarPerfil, cerrarSesion])
+  }, [sesion, perfil, errorPerfil, cargando, recargarPerfil, cerrarSesion])
 
   return <ContextoAuth.Provider value={valor}>{children}</ContextoAuth.Provider>
 }

@@ -23,12 +23,6 @@ import { Button } from '@/components/ui/button'
 import { api } from '@/lib/api'
 import { cn, fechaPeru } from '@/lib/utils'
 
-// Los tipos MIME van junto a las extensiones porque en celular el selector de
-// archivos suele filtrar por MIME y no por extensión.
-const ACEPTADOS =
-  '.pdf,.xlsx,.xlsm,.csv,application/pdf,text/csv,' +
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-
 const EXTENSIONES = ['.pdf', '.xlsx', '.xlsm', '.csv']
 const MIMES = ['application/pdf', 'text/csv', 'spreadsheetml', 'excel']
 const MAX_ARCHIVOS = 12
@@ -91,17 +85,6 @@ export default function UploadZone({ onProcesado, onPedirClave }) {
   const [arrastrando, setArrastrando] = useState(false)
   const [resultados, setResultados] = useState(null)
   const [error, setError] = useState(null)
-
-  function abrirSelector() {
-    if (!inputRef.current) return
-    // Se limpia ANTES de abrir el selector, no después de leer los archivos.
-    // Hacerlo en el onChange (justo tras copiar la FileList) invalida las
-    // referencias a los archivos en Safari de iOS, y la subida se queda a medias
-    // sin ningún error. Limpiar acá logra lo mismo —permitir volver a elegir el
-    // mismo archivo— sin ese riesgo.
-    inputRef.current.value = ''
-    inputRef.current.click()
-  }
 
   function agregar(lista) {
     const archivos = Array.from(lista || [])
@@ -182,10 +165,8 @@ export default function UploadZone({ onProcesado, onPedirClave }) {
            Toda la zona es un botón: en celular no se puede arrastrar, y obligar a
            acertarle a un botón chico dentro de un recuadro grande es una molestia
            innecesaria. En pantalla ancha además acepta arrastrar. */}
-      <button
-        type="button"
-        onClick={abrirSelector}
-        disabled={subiendo}
+      <label
+        htmlFor="entrada-archivos"
         onDragOver={(e) => {
           e.preventDefault()
           setArrastrando(true)
@@ -197,11 +178,13 @@ export default function UploadZone({ onProcesado, onPedirClave }) {
           agregar(e.dataTransfer.files)
         }}
         className={cn(
-          'w-full rounded-xl border border-dashed px-6 py-9 text-center transition-colors',
-          'disabled:opacity-60 disabled:cursor-not-allowed',
+          'block w-full rounded-xl border border-dashed px-6 py-9 text-center transition-colors',
+          subiendo
+            ? 'pointer-events-none opacity-60'
+            : 'cursor-pointer active:bg-white/4',
           arrastrando
             ? 'border-primary bg-primary/8'
-            : 'border-white/15 hover:border-white/25 active:bg-white/4',
+            : 'border-white/15 hover:border-white/25',
         )}
       >
         <UploadCloud className="mx-auto size-9 text-muted-foreground" />
@@ -218,18 +201,34 @@ export default function UploadZone({ onProcesado, onPedirClave }) {
         <span className="mt-4 inline-block rounded-lg bg-secondary px-3 py-2 text-sm font-medium text-secondary-foreground">
           Seleccionar archivos
         </span>
-      </button>
 
-      {/* Fuera del <button>: un input dentro de un botón es HTML inválido y el
-          clic se dispararía dos veces. */}
-      <input
-        ref={inputRef}
-        type="file"
-        multiple
-        accept={ACEPTADOS}
-        className="hidden"
-        onChange={(e) => agregar(e.target.files)}
-      />
+        {/* El input va DENTRO del label y con `sr-only`, no con `hidden`.
+            `hidden` es display:none, y varios navegadores de celular se niegan a
+            abrir el selector de un input así, o lo abren y descartan el evento
+            change: el usuario elegía su archivo y no pasaba absolutamente nada,
+            ni un mensaje. Con el label nativo el toque llega directo al control
+            del sistema y no hace falta ningún .click() por JavaScript.
+
+            Tampoco lleva `accept`: en Android, filtrar por tipo hace que varios
+            gestores de archivos muestren los PDF en gris y no se puedan elegir.
+            Es peor esconderle el archivo al usuario que aceptarlo y explicarle
+            después; el formato real se valida por el contenido en el backend. */}
+        <input
+          id="entrada-archivos"
+          ref={inputRef}
+          type="file"
+          multiple
+          disabled={subiendo}
+          className="sr-only"
+          onClick={(e) => {
+            // Limpiar acá permite volver a elegir el mismo archivo. Se hace antes
+            // de que se abra el selector, no después de leer los archivos, porque
+            // eso último invalida las referencias en Safari de iOS.
+            e.currentTarget.value = ''
+          }}
+          onChange={(e) => agregar(e.target.files)}
+        />
+      </label>
 
       {/* --- Lista de seleccionados --- */}
       {seleccionados.length > 0 && (

@@ -22,6 +22,7 @@ import Landing from "@/pages/Landing";
 import Login from "@/pages/Login";
 import Onboarding from "@/pages/Onboarding";
 import Register from "@/pages/Register";
+import SinConexion from "@/pages/SinConexion";
 import SuscripcionInactiva from "@/pages/SuscripcionInactiva";
 import { ProveedorAuth, useAuth } from "@/lib/auth";
 
@@ -39,12 +40,22 @@ function Cargando() {
 }
 
 function RutaPrivada({ children, soloAdmin = false }) {
-  const { autenticado, cargando, activo, esAdmin, onboardingCompleto } =
-    useAuth();
+  const {
+    autenticado,
+    cargando,
+    activo,
+    esAdmin,
+    onboardingCompleto,
+    perfilCargado,
+    errorPerfil,
+  } = useAuth();
   const { pathname } = useLocation();
 
   if (cargando) return <Cargando />;
   if (!autenticado) return <Navigate to="/login" replace />;
+  // Si el perfil no cargó, no se puede deducir nada de él: mandar al onboarding
+  // acá hacía que un servidor caído se viera como un onboarding pendiente.
+  if (!perfilCargado && errorPerfil) return <SinConexion />;
   if (!onboardingCompleto && pathname !== "/onboarding") {
     return <Navigate to="/onboarding" replace />;
   }
