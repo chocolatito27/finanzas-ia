@@ -85,18 +85,38 @@ function revisar(archivo) {
 
 export default function UploadZone({ onProcesado, onPedirClave }) {
   const inputRef = useRef(null)
+  const listaRef = useRef(null)
   const [seleccionados, setSeleccionados] = useState([])
   const [subiendo, setSubiendo] = useState(false)
   const [arrastrando, setArrastrando] = useState(false)
   const [resultados, setResultados] = useState(null)
   const [error, setError] = useState(null)
 
+  function abrirSelector() {
+    if (!inputRef.current) return
+    // Se limpia ANTES de abrir el selector, no después de leer los archivos.
+    // Hacerlo en el onChange (justo tras copiar la FileList) invalida las
+    // referencias a los archivos en Safari de iOS, y la subida se queda a medias
+    // sin ningún error. Limpiar acá logra lo mismo —permitir volver a elegir el
+    // mismo archivo— sin ese riesgo.
+    inputRef.current.value = ''
+    inputRef.current.click()
+  }
+
   function agregar(lista) {
     const archivos = Array.from(lista || [])
     setResultados(null)
     setError(null)
 
-    if (archivos.length === 0) return
+    if (archivos.length === 0) {
+      // Pasa en celular cuando el selector devuelve vacío: el usuario cree que
+      // eligió algo y no ocurre nada. Mejor decirlo que dejarlo en silencio.
+      setError(
+        'No se recibió ningún archivo. Si lo elegiste desde Drive o WhatsApp, ' +
+          'descárgalo primero al teléfono y vuelve a intentarlo desde Archivos o Descargas.',
+      )
+      return
+    }
 
     const aceptados = []
     const rechazados = []
@@ -122,6 +142,12 @@ export default function UploadZone({ onProcesado, onPedirClave }) {
           setError(`Máximo ${MAX_ARCHIVOS} archivos por vez.`)
         }
         return total.slice(0, MAX_ARCHIVOS)
+      })
+
+      // En celular la lista y el botón "Procesar" quedan debajo del pliegue: el
+      // archivo sí se agregó, pero sin ver el botón parece que no pasó nada.
+      requestAnimationFrame(() => {
+        listaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
       })
     }
   }
@@ -158,7 +184,7 @@ export default function UploadZone({ onProcesado, onPedirClave }) {
            innecesaria. En pantalla ancha además acepta arrastrar. */}
       <button
         type="button"
-        onClick={() => inputRef.current?.click()}
+        onClick={abrirSelector}
         disabled={subiendo}
         onDragOver={(e) => {
           e.preventDefault()
@@ -202,17 +228,17 @@ export default function UploadZone({ onProcesado, onPedirClave }) {
         multiple
         accept={ACEPTADOS}
         className="hidden"
-        onChange={(e) => {
-          agregar(e.target.files)
-          // Se limpia para que elegir el mismo archivo dos veces vuelva a
-          // disparar onChange (en celular pasa seguido al reintentar).
-          e.target.value = ''
-        }}
+        onChange={(e) => agregar(e.target.files)}
       />
 
       {/* --- Lista de seleccionados --- */}
       {seleccionados.length > 0 && (
-        <div className="mt-4 space-y-2">
+        <div ref={listaRef} className="mt-4 space-y-2">
+          <p className="text-sm text-foreground">
+            {seleccionados.length}{' '}
+            {seleccionados.length === 1 ? 'archivo listo' : 'archivos listos'} para
+            procesar:
+          </p>
           {seleccionados.map((archivo, indice) => {
             const Icono = iconoArchivo(archivo.name)
             return (
@@ -242,12 +268,18 @@ export default function UploadZone({ onProcesado, onPedirClave }) {
             {subiendo ? (
               <>
                 <Loader2 className="size-4 animate-spin" />
-                Leyendo y categorizando con IA… (30–60 s)
+                Leyendo y categorizando con IA…
               </>
             ) : (
               `Procesar ${seleccionados.length} archivo${seleccionados.length === 1 ? '' : 's'}`
             )}
           </Button>
+
+          {subiendo && (
+            <p className="text-center text-xs text-muted-foreground">
+              Puede tardar entre 30 s y 2 minutos. No cierres esta pantalla.
+            </p>
+          )}
         </div>
       )}
 
