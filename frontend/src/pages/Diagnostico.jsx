@@ -40,12 +40,32 @@ export default function Diagnostico() {
     ])
 
   function alCambiar(etiqueta) {
-    return (e) => {
+    return async (e) => {
       const archivos = Array.from(e.target.files || [])
       anotar(`change en ${etiqueta}`, {
         cantidad: archivos.length,
         archivos: archivos.map(describir),
       })
+
+      // Lo que de verdad falta saber: si la petición sale del celular y llega
+      // completa al servidor. El selector ya se comprobó que funciona.
+      if (archivos.length === 0) return
+      const archivo = archivos[0]
+      anotar('subiendo al servidor…', { nombre: archivo.name, bytes: archivo.size })
+      const inicio = performance.now()
+      try {
+        const respuesta = await api.probarSubida(archivo)
+        anotar('respuesta del servidor', {
+          ms: Math.round(performance.now() - inicio),
+          ...respuesta,
+        })
+      } catch (err) {
+        anotar('FALLÓ la subida', {
+          ms: Math.round(performance.now() - inicio),
+          mensaje: err.message,
+          estado: err.estado,
+        })
+      }
     }
   }
 
@@ -134,8 +154,10 @@ export default function Diagnostico() {
           Diagnóstico del selector de archivos
         </h1>
         <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-          Prueba las tres opciones de abajo: en cada una elige tu PDF del banco.
-          Abajo se va a ir llenando un registro. Cuando termines, toca{' '}
+          Con <strong className="text-foreground">una sola</strong> de las opciones
+          basta: elige tu PDF del banco. Se va a subir al servidor para comprobar
+          que llega completo (no se guarda nada). Puede tardar hasta un minuto si
+          el servidor estaba dormido. Cuando el registro deje de crecer, toca{' '}
           <strong className="text-foreground">Enviar diagnóstico</strong>.
         </p>
 

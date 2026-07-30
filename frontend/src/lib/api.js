@@ -134,4 +134,13 @@ export const api = {
   // Diagnóstico del selector de archivos en celular (ver pages/Diagnostico.jsx)
   enviarDiagnostico: (datos) =>
     pedir('/api/diagnostico', { metodo: 'POST', cuerpo: datos }),
+  probarSubida: (archivo) => {
+    const formData = new FormData()
+    formData.append('archivo', archivo)
+    return pedir('/api/diagnostico/subida', {
+      metodo: 'POST',
+      cuerpo: formData,
+      esFormData: true,
+    })
+  },
 }

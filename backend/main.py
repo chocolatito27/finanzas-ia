@@ -11,7 +11,7 @@ from __future__ import annotations
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Request, status
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -127,6 +127,52 @@ async def guardar_diagnostico(datos: dict, request: Request) -> dict:
         str(datos.get("agente"))[:120], len(registro),
     )
     return {"ok": True, "eventos_guardados": len(registro[:200])}
+
+
+@app.post("/api/diagnostico/subida", tags=["salud"])
+async def diagnostico_subida(archivo: UploadFile = File(...)) -> dict:
+    """Recibe un archivo y solo reporta qué llegó. NO guarda nada ni llama a la IA.
+
+    **Temporal.** Sirve para aislar una sola pregunta que no se puede responder
+    desde escritorio: ¿la petición multipart sale del celular y llega completa?
+    Todo lo demás del pipeline (clave del PDF, extracción, categorización, base de
+    datos) queda fuera a propósito.
+
+    Es público porque la página /diagnostico también lo es, y no persiste nada.
+    """
+    from routers.archivos import detectar_formato
+
+    contenido = await archivo.read()
+    formato, motivo = detectar_formato(contenido, archivo.filename or "")
+
+    # Solo se mira si el PDF pide contraseña; no se intenta abrirlo.
+    protegido = None
+    if formato == "pdf":
+        try:
+            import io
+
+            import pikepdf
+
+            try:
+                with pikepdf.open(io.BytesIO(contenido)):
+                    protegido = False
+            except pikepdf.PasswordError:
+                protegido = True
+        except Exception:
+            protegido = None
+
+    logger.info(
+        "Diagnóstico de subida: nombre=%r bytes=%s formato=%s protegido=%s",
+        archivo.filename, len(contenido), formato, protegido,
+    )
+    return {
+        "nombre_recibido": archivo.filename,
+        "bytes_recibidos": len(contenido),
+        "content_type_declarado": archivo.content_type,
+        "formato_detectado": formato,
+        "motivo_rechazo": motivo,
+        "pide_contrasena": protegido,
+    }
 
 
 app.include_router(auth.router)
